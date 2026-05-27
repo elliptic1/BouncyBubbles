@@ -1,0 +1,18 @@
+<resources>
+    <string name="app_name">BouncyBubbles</string>
+    <string name="tagline">Glossy bubbles that float, roll, and pop — on top of everything.</string>
+    <string name="overlay_permission_granted">Overlay permission granted</string>
+    <string name="overlay_permission_missing">Overlay permission required</string>
+    <string name="grant_overlay_permission">Grant overlay permission</string>
+    <string name="launch_bubbles">Launch Bubbles</string>
+    <string name="stop_bubbles">Stop Bubbles</string>
+    <string name="initial_count">Initial bubble count: %1$d</string>
+    <string name="bubble_size">Bubble size</string>
+    <string name="gravity_strength">Gravity strength: %1$.2fx</string>
+    <string name="bounciness">Bounciness: %1$.2f</string>
+    <string name="size_small">Small</string>
+    <string name="size_medium">Medium</string>
+    <string name="size_large">Large</string>
+    <string name="notification_channel_name">Bouncy Bubbles overlay</string>
+    <string name="notification_text">Bouncy Bubbles is running — tap to stop</string>
+</resources>
