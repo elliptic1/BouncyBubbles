@@ -18,9 +18,22 @@ import kotlin.math.sqrt
  * view drives it by setting [gravityX]/[gravityY], calling [step], and then
  * reading [bubbles] for drawing.
  */
+/**
+ * A static circular obstacle that bubbles bounce off of (e.g. the FAB).
+ * The obstacle never moves under physics — the service mutates [x],[y]
+ * directly when the FAB is repositioned, and the engine treats it as
+ * infinite mass.
+ */
+class StaticObstacle(
+    var x: Float,
+    var y: Float,
+    var radius: Float,
+)
+
 class PhysicsEngine {
 
     val bubbles: MutableList<Bubble> = mutableListOf()
+    val obstacles: MutableList<StaticObstacle> = mutableListOf()
 
     // Gravity in screen-space px/s^2. Positive Y points DOWN the screen.
     var gravityX: Float = 0f
@@ -61,10 +74,26 @@ class PhysicsEngine {
         for (s in 0 until sub) {
             integrate(h, dampSub)
             resolveEdges()
+            resolveObstacleCollisions()
             resolveBubbleCollisions()
         }
 
         advancePops(dt)
+        advanceSpawns(dt)
+    }
+
+    private fun advanceSpawns(dt: Float) {
+        // ~180ms spawn-in animation.
+        val rate = dt / 0.18f
+        var i = 0
+        val n = bubbles.size
+        while (i < n) {
+            val b = bubbles[i]
+            if (b.spawnProgress < 1f) {
+                b.spawnProgress = (b.spawnProgress + rate).coerceAtMost(1f)
+            }
+            i++
+        }
     }
 
     private fun integrate(h: Float, damp: Float) {
@@ -124,6 +153,62 @@ class PhysicsEngine {
             } else if (b.y + r > h) {
                 b.y = h - r
                 if (b.vy > 0f) b.vy = -b.vy * restitution
+            }
+            i++
+        }
+    }
+
+    /**
+     * Static obstacles are infinite-mass circles. Bubbles separate outward
+     * along the (bubble - obstacle) normal and reflect velocity along that
+     * normal with [restitution]. Obstacles do not accumulate velocity.
+     *
+     * A bubble that's currently being dragged still gets positionally
+     * separated so it can't be jammed through the FAB by the user's finger,
+     * but its velocity isn't changed (drag spring owns it).
+     */
+    private fun resolveObstacleCollisions() {
+        val obs = obstacles
+        val on = obs.size
+        if (on == 0) return
+        var i = 0
+        val bn = bubbles.size
+        while (i < bn) {
+            val b = bubbles[i]
+            if (b.popping) { i++; continue }
+            var k = 0
+            while (k < on) {
+                val o = obs[k]
+                val dx = b.x - o.x
+                val dy = b.y - o.y
+                val rSum = b.radius + o.radius
+                val distSq = dx * dx + dy * dy
+                if (distSq < rSum * rSum) {
+                    val dist = if (distSq > 1e-6f) sqrt(distSq) else 0f
+                    val nx: Float
+                    val ny: Float
+                    if (dist > 1e-4f) {
+                        nx = dx / dist
+                        ny = dy / dist
+                    } else {
+                        // Coincident — push straight up by default.
+                        nx = 0f
+                        ny = -1f
+                    }
+                    val overlap = rSum - dist
+                    // Push bubble fully out (obstacle is infinite mass).
+                    b.x += nx * overlap
+                    b.y += ny * overlap
+                    if (!b.beingDragged) {
+                        val vDotN = b.vx * nx + b.vy * ny
+                        if (vDotN < 0f) {
+                            // Reflect velocity along the normal.
+                            b.vx -= (1f + restitution) * vDotN * nx
+                            b.vy -= (1f + restitution) * vDotN * ny
+                        }
+                    }
+                }
+                k++
             }
             i++
         }
