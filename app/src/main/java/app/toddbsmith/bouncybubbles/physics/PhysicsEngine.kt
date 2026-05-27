@@ -47,7 +47,6 @@ class PhysicsEngine {
     var restitution: Float = 0.85f          // bounciness (0..1)
     var linearDampingPerSec: Float = 0.25f  // fraction of speed lost per second
     var substeps: Int = 4
-    var dragSpringStiffness: Float = 18f    // higher = bubble tracks finger tighter
     var popDurationSec: Float = 0.18f
 
     fun addBubble(b: Bubble) {
@@ -105,24 +104,21 @@ class PhysicsEngine {
             if (b.popping) { i++; continue }
 
             if (b.beingDragged) {
-                // Spring toward the target (finger position + drag offset).
-                // Critically damped-ish: v += k*(target-pos)*h, then heavy damping.
-                val dx = b.targetX - b.x
-                val dy = b.targetY - b.y
-                b.vx += dx * dragSpringStiffness * h
-                b.vy += dy * dragSpringStiffness * h
-                // Heavy velocity damping while dragging so it feels glued.
-                b.vx *= 0.55f
-                b.vy *= 0.55f
+                // 1:1 finger tracking — bubble teleports to the target every
+                // substep. No spring, no lag. On release the service applies
+                // the touch-sample fling velocity directly to vx/vy.
+                b.x = b.targetX
+                b.y = b.targetY
+                b.vx = 0f
+                b.vy = 0f
             } else {
                 b.vx += gravityX * h
                 b.vy += gravityY * h
                 b.vx *= damp
                 b.vy *= damp
+                b.x += b.vx * h
+                b.y += b.vy * h
             }
-
-            b.x += b.vx * h
-            b.y += b.vy * h
             i++
         }
     }
