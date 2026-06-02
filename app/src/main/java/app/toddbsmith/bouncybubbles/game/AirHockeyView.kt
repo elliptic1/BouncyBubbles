@@ -31,6 +31,8 @@ class AirHockeyView(
     private val vsAi: Boolean,
     private val onScore: (p1: Int, p2: Int) -> Unit,
     private val onWin: (p1Won: Boolean) -> Unit,
+    /** When true the table is see-through (for floating over the home screen). */
+    private val transparent: Boolean = false,
 ) : View(context), Choreographer.FrameCallback {
 
     // ── Tunables ────────────────────────────────────────────────────────────
@@ -56,7 +58,8 @@ class AirHockeyView(
     private var lastFrameNanos = 0L
     private var running = false
     private var goalFlashSec = 0f           // brief freeze + flash after a goal
-    private var stuckSec = 0f               // how long the puck has been near-stationary
+    private var stuckSec = 0f               // how long the puck has lingered in one area
+    private var anchorX = 0f; private var anchorY = 0f  // reference point for stuck detection
 
     // Pointer → which mallet it's dragging (-1 none)
     private var p1Pointer = -1
@@ -116,6 +119,8 @@ class AirHockeyView(
         p1.vx = 0f; p1.vy = 0f; p2.vx = 0f; p2.vy = 0f
         // Tiny nudge toward the receiver so the puck isn't dead-still.
         puckVy = if (servingToP1) dp(300f) else -dp(300f)
+        // Reset stuck-detection anchor to the new puck position.
+        anchorX = puckX; anchorY = puckY; stuckSec = 0f
     }
 
     fun start() { if (!running) { running = true; lastFrameNanos = 0L; Choreographer.getInstance().postFrameCallback(this) } }
@@ -167,26 +172,33 @@ class AirHockeyView(
      * and harder if it's pinned near a wall.
      */
     private fun unstickPuck(dt: Float) {
-        val speed = hypot(puckVx, puckVy)
-        // Near a wall/corner is the real trap — react fast and to a higher speed
-        // threshold. In open table, only intervene when the puck is essentially
-        // dead, so we don't interrupt a legitimately slow drift.
-        val nearEdge = puckX < left + puckR * 2.2f || puckX > right - puckR * 2.2f ||
-            puckY < top + puckR * 2.2f || puckY > bottom - puckR * 2.2f
-        val slow = if (nearEdge) speed < dp(120f) else speed < dp(35f)
-        if (slow) stuckSec += dt * (if (nearEdge) 2.5f else 1.0f) else stuckSec = 0f
+        // Position-based detection: if the puck stays within a small radius of an
+        // anchor point for too long, it's trapped — regardless of momentary velocity
+        // spikes from the AI mallet jittering against it (that velocity-based check
+        // was the reason it still got stuck). Track displacement from the anchor.
+        val roam = hypot(puckX - anchorX, puckY - anchorY)
+        if (roam > dp(90f)) {
+            // Puck has genuinely travelled — reset the anchor and the timer.
+            anchorX = puckX; anchorY = puckY
+            stuckSec = 0f
+        } else {
+            // Lingering near the anchor. Corners are the real trap, so count faster there.
+            val nearEdge = puckX < left + puckR * 2.5f || puckX > right - puckR * 2.5f ||
+                puckY < top + puckR * 2.5f || puckY > bottom - puckR * 2.5f
+            stuckSec += dt * (if (nearEdge) 2.0f else 1.0f)
+        }
 
-        if (stuckSec > 1.4f) {
-            // Kick toward the table center with a healthy speed so play resumes.
+        if (stuckSec > 1.5f) {
+            // Free it: pull off the wall, then kick toward center hard enough to clear.
+            puckX = puckX.coerceIn(left + puckR + dp(4f), right - puckR - dp(4f))
+            puckY = puckY.coerceIn(top + puckR + dp(4f), bottom - puckR - dp(4f))
             val tx = centerX - puckX
             val ty = midY - puckY
             val d = hypot(tx, ty).coerceAtLeast(1f)
-            val kick = dp(1400f)
+            val kick = dp(1600f)
             puckVx = tx / d * kick
             puckVy = ty / d * kick
-            // Pull it physically off the wall a touch so it doesn't re-pin instantly.
-            puckX = puckX.coerceIn(left + puckR + 1f, right - puckR - 1f)
-            puckY = puckY.coerceIn(top + puckR + 1f, bottom - puckR - 1f)
+            anchorX = puckX; anchorY = puckY
             stuckSec = 0f
         }
     }
@@ -333,9 +345,14 @@ class AirHockeyView(
     }
 
     private fun assignPointer(id: Int, x: Float, y: Float) {
-        // Bottom half → P1, top half → P2 (only if human).
-        if (y >= midY && p1Pointer == -1) p1Pointer = id
-        else if (y < midY && !vsAi && p2Pointer == -1) p2Pointer = id
+        // You must GRAB your mallet (touch down on or near it) to control it —
+        // tapping empty space no longer teleports the mallet there.
+        val grab = malletR * 1.6f   // forgiving grab radius
+        if (y >= midY && p1Pointer == -1 && hypot(x - p1.x, y - p1.y) <= grab) {
+            p1Pointer = id
+        } else if (y < midY && !vsAi && p2Pointer == -1 && hypot(x - p2.x, y - p2.y) <= grab) {
+            p2Pointer = id
+        }
     }
 
     private fun moveMallet(m: Mallet, x: Float, y: Float, topHalf: Boolean, dt: Float) {
@@ -348,9 +365,19 @@ class AirHockeyView(
 
     // ── Render ────────────────────────────────────────────────────────────────
     override fun onDraw(c: Canvas) {
-        c.drawColor(Color.parseColor("#06141C"))
-        // Table felt
-        c.drawRoundRect(left, top, right, bottom, dp(18f), dp(18f), feltPaint)
+        if (transparent) {
+            // Floating mode: let the home screen / other apps show through. Draw only
+            // a faint tint so the play area is readable, plus a bright rink border.
+            c.drawColor(Color.argb(70, 6, 20, 28))
+            c.drawRoundRect(left, top, right, bottom, dp(18f), dp(18f),
+                Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    style = Paint.Style.STROKE; strokeWidth = dp(4f); color = Color.parseColor("#3FA9C9")
+                })
+        } else {
+            c.drawColor(Color.parseColor("#06141C"))
+            // Table felt
+            c.drawRoundRect(left, top, right, bottom, dp(18f), dp(18f), feltPaint)
+        }
         // Center line + circle
         c.drawLine(left, midY, right, midY, linePaint)
         c.drawCircle(centerX, midY, dp(70f), linePaint)

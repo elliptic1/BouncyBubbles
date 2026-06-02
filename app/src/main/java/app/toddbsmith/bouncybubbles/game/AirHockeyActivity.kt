@@ -1,18 +1,23 @@
 package app.toddbsmith.bouncybubbles.game
 
 import android.app.AlertDialog
+import android.content.Intent
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.view.Gravity
 import android.view.View
 import android.view.WindowInsets
 import android.view.WindowManager
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.core.content.ContextCompat
 
 /**
  * Full-screen air hockey host. Shows a quick mode picker (2-player vs AI),
@@ -47,15 +52,41 @@ class AirHockeyActivity : ComponentActivity() {
             gravity = Gravity.CENTER
             setPadding(0, 0, 0, dp(28))
         }
+        val floatCheck = CheckBox(this).apply {
+            text = "Float over my screen"
+            textSize = 16f
+            setTextColor(Color.WHITE)
+            isChecked = false
+            setPadding(dp(8), dp(8), dp(8), dp(24))
+        }
+
         panel.addView(title)
-        panel.addView(menuButton("2 Players") { startGame(vsAi = false) })
+        panel.addView(floatCheck)
+        panel.addView(menuButton("2 Players") { launch(vsAi = false, floating = floatCheck.isChecked) })
         panel.addView(spacer())
-        panel.addView(menuButton("1 Player vs Computer") { startGame(vsAi = true) })
+        panel.addView(menuButton("1 Player vs Computer") { launch(vsAi = true, floating = floatCheck.isChecked) })
 
         root.addView(panel, FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.MATCH_PARENT,
         ))
+    }
+
+    /** Route to the floating overlay service, or the in-Activity full-screen game. */
+    private fun launch(vsAi: Boolean, floating: Boolean) {
+        if (floating) {
+            if (!Settings.canDrawOverlays(this)) {
+                Toast.makeText(this, "Grant 'draw over other apps' on the main screen first", Toast.LENGTH_LONG).show()
+                return
+            }
+            val intent = Intent(this, AirHockeyOverlayService::class.java).apply {
+                putExtra(AirHockeyOverlayService.EXTRA_VS_AI, vsAi)
+            }
+            ContextCompat.startForegroundService(this, intent)
+            finish()   // leave the Activity; the game now floats over the home screen
+        } else {
+            startGame(vsAi)
+        }
     }
 
     private fun startGame(vsAi: Boolean) {

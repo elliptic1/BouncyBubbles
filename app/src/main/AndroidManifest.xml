@@ -43,5 +43,14 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Overlay bubble visualization controlled by user." />
         </service>
+
+        <service
+            android:name=".game.AirHockeyOverlayService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Air hockey game floating over the screen, controlled by user." />
+        </service>
     </application>
 </manifest>
