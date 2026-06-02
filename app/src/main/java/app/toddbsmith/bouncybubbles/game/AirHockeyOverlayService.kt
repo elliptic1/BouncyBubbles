@@ -69,6 +69,7 @@ class AirHockeyOverlayService : Service() {
             onScore = { _, _ -> },
             onWin = { stopSelf() },          // game over → close the overlay
             transparent = true,
+            onExit = { tearDown(); stopSelf() },  // on-screen ✕ → leave the game
         )
         // FLAG_NOT_FOCUSABLE so we don't steal the keyboard/IME, but NO NOT_TOUCHABLE
         // because the game needs touch. Fills the screen incl. under the status bar.
@@ -80,13 +81,16 @@ class AirHockeyOverlayService : Service() {
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
                 WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
             PixelFormat.TRANSLUCENT,
-        )
+        ).apply {
+            // Pin the game to portrait even if the rest of the phone rotates.
+            screenOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        }
         try {
             windowManager.addView(game, params)
             view = game
             attached = true
             game.start()
-            Toast.makeText(this, "Air hockey — swipe the notification's Stop to exit", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Air hockey — tap the red ✕ (top-right) to exit", Toast.LENGTH_LONG).show()
         } catch (e: Exception) {
             Toast.makeText(this, "Couldn't start overlay: ${e.message}", Toast.LENGTH_SHORT).show()
             stopSelf()

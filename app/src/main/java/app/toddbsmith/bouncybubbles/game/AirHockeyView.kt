@@ -33,6 +33,8 @@ class AirHockeyView(
     private val onWin: (p1Won: Boolean) -> Unit,
     /** When true the table is see-through (for floating over the home screen). */
     private val transparent: Boolean = false,
+    /** When set, an on-screen ✕ button is drawn; tapping it calls this (used to exit floating mode). */
+    private val onExit: (() -> Unit)? = null,
 ) : View(context), Choreographer.FrameCallback {
 
     // ── Tunables ────────────────────────────────────────────────────────────
@@ -103,6 +105,13 @@ class AirHockeyView(
     private val midY get() = height / 2f
     private val goalHalf get() = (right - left) * goalFrac / 2f
     private val centerX get() = width / 2f
+
+    // On-screen exit button (only when onExit is set, i.e. floating mode), top-right.
+    private val exitR get() = dp(26f)
+    private val exitCx get() = right - exitR - dp(6f)
+    private val exitCy get() = top + exitR + dp(6f)
+    private fun isExitHit(x: Float, y: Float) =
+        onExit != null && hypot(x - exitCx, y - exitCy) <= exitR * 1.4f
 
     override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
         super.onSizeChanged(w, h, ow, oh)
@@ -324,7 +333,9 @@ class AirHockeyView(
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
                 val idx = e.actionIndex
-                assignPointer(e.getPointerId(idx), e.getX(idx), e.getY(idx))
+                val x = e.getX(idx); val y = e.getY(idx)
+                if (isExitHit(x, y)) { onExit?.invoke(); return true }
+                assignPointer(e.getPointerId(idx), x, y)
             }
             MotionEvent.ACTION_MOVE -> {
                 val dt = 1f / 60f
@@ -400,6 +411,18 @@ class AirHockeyView(
         if (goalFlashSec > 0f) {
             flashPaint.alpha = (goalFlashSec / 0.7f * 90f).toInt().coerceIn(0, 90)
             c.drawRect(0f, 0f, width.toFloat(), height.toFloat(), flashPaint)
+        }
+
+        // Exit button (floating mode only) — a red ✕ in the top-right corner.
+        if (onExit != null) {
+            c.drawCircle(exitCx, exitCy, exitR,
+                Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#E53935") })
+            val cross = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                color = Color.WHITE; strokeWidth = dp(4f); strokeCap = Paint.Cap.ROUND
+            }
+            val r = exitR * 0.42f
+            c.drawLine(exitCx - r, exitCy - r, exitCx + r, exitCy + r, cross)
+            c.drawLine(exitCx - r, exitCy + r, exitCx + r, exitCy - r, cross)
         }
     }
 
