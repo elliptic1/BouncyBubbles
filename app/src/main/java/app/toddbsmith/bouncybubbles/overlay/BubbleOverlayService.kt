@@ -23,6 +23,7 @@ import android.view.Choreographer
 import android.view.Gravity
 import android.view.Surface
 import android.view.View
+import android.view.WindowInsets
 import android.view.WindowManager
 import android.view.animation.OvershootInterpolator
 import androidx.core.app.NotificationCompat
@@ -241,10 +242,18 @@ class BubbleOverlayService : Service(),
     // ----- Screen metrics -----
 
     private fun refreshScreenMetrics() {
+        var insetL = 0; var insetT = 0; var insetR = 0; var insetB = 0
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            val bounds: Rect = windowManager.currentWindowMetrics.bounds
+            val metrics = windowManager.currentWindowMetrics
+            val bounds: Rect = metrics.bounds
             screenW = bounds.width()
             screenH = bounds.height()
+            // Keep bubbles out of the status bar + navigation bar (and display cutout)
+            // so they never settle where the system swallows the touch.
+            val ins = metrics.windowInsets.getInsets(
+                WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout()
+            )
+            insetL = ins.left; insetT = ins.top; insetR = ins.right; insetB = ins.bottom
         } else {
             @Suppress("DEPRECATION")
             val display = windowManager.defaultDisplay
@@ -256,6 +265,10 @@ class BubbleOverlayService : Service(),
         }
         engine.width = screenW.toFloat()
         engine.height = screenH.toFloat()
+        engine.insetLeft = insetL.toFloat()
+        engine.insetTop = insetT.toFloat()
+        engine.insetRight = insetR.toFloat()
+        engine.insetBottom = insetB.toFloat()
     }
 
     override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {

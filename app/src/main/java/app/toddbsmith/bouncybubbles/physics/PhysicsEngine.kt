@@ -43,6 +43,14 @@ class PhysicsEngine {
     var width: Float = 0f
     var height: Float = 0f
 
+    // System-bar insets (status bar, navigation bar) in raw screen px. Bubbles are
+    // clamped to the tappable safe area [inset..size-inset] so they never settle
+    // behind the nav bar / status bar, where touches go to the system, not the bubble.
+    var insetTop: Float = 0f
+    var insetBottom: Float = 0f
+    var insetLeft: Float = 0f
+    var insetRight: Float = 0f
+
     // Tunable knobs.
     var restitution: Float = 0.85f          // bounciness (0..1)
     var linearDampingPerSec: Float = 0.25f  // fraction of speed lost per second
@@ -124,9 +132,14 @@ class PhysicsEngine {
     }
 
     private fun resolveEdges() {
-        val w = width
-        val h = height
-        if (w <= 0f || h <= 0f) return
+        if (width <= 0f || height <= 0f) return
+
+        // Tappable safe area: clamp inside the system-bar insets so bubbles stay
+        // off the nav bar / status bar and remain tappable.
+        val left = insetLeft
+        val top = insetTop
+        val right = width - insetRight
+        val bottom = height - insetBottom
 
         var i = 0
         val n = bubbles.size
@@ -135,19 +148,19 @@ class PhysicsEngine {
             if (b.popping) { i++; continue }
             val r = b.radius
 
-            if (b.x - r < 0f) {
-                b.x = r
+            if (b.x - r < left) {
+                b.x = left + r
                 if (b.vx < 0f) b.vx = -b.vx * restitution
-            } else if (b.x + r > w) {
-                b.x = w - r
+            } else if (b.x + r > right) {
+                b.x = right - r
                 if (b.vx > 0f) b.vx = -b.vx * restitution
             }
 
-            if (b.y - r < 0f) {
-                b.y = r
+            if (b.y - r < top) {
+                b.y = top + r
                 if (b.vy < 0f) b.vy = -b.vy * restitution
-            } else if (b.y + r > h) {
-                b.y = h - r
+            } else if (b.y + r > bottom) {
+                b.y = bottom - r
                 if (b.vy > 0f) b.vy = -b.vy * restitution
             }
             i++
