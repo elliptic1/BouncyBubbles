@@ -56,6 +56,7 @@ class AirHockeyView(
     private var lastFrameNanos = 0L
     private var running = false
     private var goalFlashSec = 0f           // brief freeze + flash after a goal
+    private var stuckSec = 0f               // how long the puck has been near-stationary
 
     // Pointer → which mallet it's dragging (-1 none)
     private var p1Pointer = -1
@@ -155,7 +156,39 @@ class AirHockeyView(
             collideMallet(p1)
             collideMallet(p2)
         }
+        unstickPuck(dt)
         checkGoals()
+    }
+
+    /**
+     * Anti-stall: a puck can lose enough energy (damping + restitution) to settle
+     * in a corner, where the AI then parks its mallet against it and it never
+     * comes free. If the puck stays slow for too long, nudge it toward center —
+     * and harder if it's pinned near a wall.
+     */
+    private fun unstickPuck(dt: Float) {
+        val speed = hypot(puckVx, puckVy)
+        // Near a wall/corner is the real trap — react fast and to a higher speed
+        // threshold. In open table, only intervene when the puck is essentially
+        // dead, so we don't interrupt a legitimately slow drift.
+        val nearEdge = puckX < left + puckR * 2.2f || puckX > right - puckR * 2.2f ||
+            puckY < top + puckR * 2.2f || puckY > bottom - puckR * 2.2f
+        val slow = if (nearEdge) speed < dp(120f) else speed < dp(35f)
+        if (slow) stuckSec += dt * (if (nearEdge) 2.5f else 1.0f) else stuckSec = 0f
+
+        if (stuckSec > 1.4f) {
+            // Kick toward the table center with a healthy speed so play resumes.
+            val tx = centerX - puckX
+            val ty = midY - puckY
+            val d = hypot(tx, ty).coerceAtLeast(1f)
+            val kick = dp(1400f)
+            puckVx = tx / d * kick
+            puckVy = ty / d * kick
+            // Pull it physically off the wall a touch so it doesn't re-pin instantly.
+            puckX = puckX.coerceIn(left + puckR + 1f, right - puckR - 1f)
+            puckY = puckY.coerceIn(top + puckR + 1f, bottom - puckR - 1f)
+            stuckSec = 0f
+        }
     }
 
     private fun clampPuckSpeed() {
@@ -234,7 +267,15 @@ class AirHockeyView(
         val targetY: Float
         // If the puck is on the AI's half and moving toward its goal, attack it.
         if (puckY < midY) {
-            targetX = puckX
+            // If the puck is hugging a side wall, attack from the inside edge so we
+            // shove it back toward center instead of pinning it against the wall.
+            val nearLeft = puckX < left + malletR + puckR
+            val nearRight = puckX > right - malletR - puckR
+            targetX = when {
+                nearLeft -> puckX + malletR * 0.8f
+                nearRight -> puckX - malletR * 0.8f
+                else -> puckX
+            }
             targetY = min(puckY - puckR, midY - malletR)   // get behind/above the puck to strike down
         } else {
             // Puck on player's half — recenter to defend the goal mouth.
