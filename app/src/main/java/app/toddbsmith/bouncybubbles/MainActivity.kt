@@ -16,6 +16,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
+import app.toddbsmith.bouncybubbles.game.AirHockeyActivity
 import app.toddbsmith.bouncybubbles.overlay.BubbleOverlayService
 import app.toddbsmith.bouncybubbles.ui.LauncherScreen
 import app.toddbsmith.bouncybubbles.ui.LauncherSettings
@@ -63,6 +64,9 @@ class MainActivity : ComponentActivity() {
                     startBubbleService(settings)
                 },
                 onStop = { stopBubbleService() },
+                onPlayAirHockey = {
+                    startActivity(Intent(this, AirHockeyActivity::class.java))
+                },
             )
         }
     }

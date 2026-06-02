@@ -27,6 +27,14 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".game.AirHockeyActivity"
+            android:exported="false"
+            android:label="Air Hockey"
+            android:screenOrientation="portrait"
+            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:theme="@style/Theme.BouncyBubbles" />
+
         <service
             android:name=".overlay.BubbleOverlayService"
             android:exported="false"

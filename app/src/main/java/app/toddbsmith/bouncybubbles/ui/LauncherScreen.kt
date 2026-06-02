@@ -66,6 +66,7 @@ fun LauncherScreen(
     onRequestOverlay: () -> Unit,
     onStart: (LauncherSettings) -> Unit,
     onStop: () -> Unit,
+    onPlayAirHockey: () -> Unit = {},
 ) {
     // Dark, playful theme. Material 3 dark palette as a baseline.
     val scheme = darkColorScheme(
@@ -125,6 +126,8 @@ fun LauncherScreen(
                     },
                     onStop = onStop,
                 )
+
+                AirHockeyButton(onClick = onPlayAirHockey)
             }
         }
     }
@@ -272,6 +275,25 @@ private fun LabeledSlider(
             onValueChange = onValueChange,
             valueRange = valueRange,
             steps = steps,
+        )
+    }
+}
+
+@Composable
+private fun AirHockeyButton(onClick: () -> Unit) {
+    Button(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(64.dp),
+        onClick = onClick,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = MaterialTheme.colorScheme.secondary,
+        ),
+    ) {
+        Text(
+            "🏒  Play Air Hockey",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
         )
     }
 }
