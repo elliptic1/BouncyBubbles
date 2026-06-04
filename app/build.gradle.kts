@@ -19,12 +19,12 @@ val hasReleaseSigning = keystoreProperties.getProperty("storeFile")?.let { file(
 
 android {
     namespace = "app.toddbsmith.bouncybubbles"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "app.toddbsmith.bouncybubbles"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 35
         versionCode = 2
         versionName = "1.0.1"
 
