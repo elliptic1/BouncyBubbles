@@ -1,0 +1,29 @@
+BouncyBubbles is a tiny fidget toy that lives on top of your phone.
+
+Tap Launch and a handful of glossy, marble-like bubbles drift down onto whatever you're already looking at — your home screen, your texts, your browser. They roll downhill when you tilt the phone. They bounce off each other and off the edges of the screen. Flick one and it ricochets around for a while. Drag one to the X at the bottom and it pops.
+
+The whole point is that the bubbles are a playful layer ON TOP of everything else. The phone underneath stays completely usable — every tap that doesn't land on a bubble still goes to the app behind. You can read a recipe, scroll Instagram, write an email, and the bubbles will keep tumbling around in the background, waiting for you to flick one.
+
+WHAT'S IN IT
+• Tilt-to-roll physics driven by the accelerometer
+• Hand-rolled 2D collision math so bubbles bounce off each other with proper momentum
+• 12 hand-picked gradient color combos
+• Adjustable bubble count, size, weight, and bounciness
+• A floating "+" button to add or pop bubbles from anywhere
+• Up to 25 bubbles on screen at once
+• A persistent notification with a one-tap stop, so you're never confused about whether it's running
+
+WHAT IT NEEDS FROM YOU
+• Permission to draw over other apps — required, because the whole point is bubbles on top of every app
+• Permission to run as a foreground service — so the bubbles keep going while you use other apps
+• Notifications permission on Android 13+ — for the running indicator
+
+WHAT IT DOES NOT DO
+• No internet — the app has no network permission, full stop
+• No analytics, no telemetry, no ads, no accounts
+• No data leaves your phone, ever
+• No tracking of any kind
+
+BouncyBubbles is a toy, not a productivity tool. It's the kind of thing you launch when you're waiting for something to load, or on a video call, or in line for coffee. Then you forget about it for an hour and find your bubbles slowly piled up in the bottom corner of the screen.
+
+If something breaks, please email elliptic1@gmail.com. The source is open at github.com/elliptic1/BouncyBubbles.

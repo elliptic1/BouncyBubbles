@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.play.publisher)
 }
 
 // Load release signing config from keystore.properties (gitignored) if present.
@@ -62,6 +63,26 @@ android {
     }
     buildFeatures {
         compose = true
+    }
+}
+
+play {
+    // CI sets PLAY_SERVICE_ACCOUNT_JSON via secret; local builds may drop a
+    // play-account.json next to this file (gitignored).
+    val envPath = System.getenv("PLAY_SERVICE_ACCOUNT_JSON")
+    serviceAccountCredentials.set(
+        if (envPath != null) file(envPath) else file("play-account.json")
+    )
+    // Track is overridable via -PplayTrack=production (default: internal).
+    val playTrack = project.findProperty("playTrack")?.toString() ?: "internal"
+    track.set(playTrack)
+    defaultToAppBundles.set(true)
+    // The plugin defaults to failing if the service account JSON is absent,
+    // which would break local debug builds. Skip the credential check when
+    // the file isn't there.
+    val credsExist = (envPath != null && file(envPath).exists()) || file("play-account.json").exists()
+    if (!credsExist) {
+        enabled.set(false)
     }
 }
 

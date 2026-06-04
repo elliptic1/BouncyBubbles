@@ -86,3 +86,7 @@ Thumbs.db
 
 # Signing config (DO NOT COMMIT)
 keystore.properties
+
+# Play Publisher service account credentials (DO NOT COMMIT)
+play-account.json
+app/play-account.json

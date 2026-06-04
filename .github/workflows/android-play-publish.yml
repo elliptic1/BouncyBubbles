@@ -1,0 +1,178 @@
+# BouncyBubbles Android build & publish.
+#
+# Pushes to `develop` build a signed release AAB and push it to the Play
+# Store internal testing track. Pushes to `release/<semver>` tags promote
+# the build already on internal to production.
+#
+# Secrets required:
+#   KEYSTORE_BASE64           — base64 of the release keystore (.jks)
+#   KEYSTORE_PASSWORD         — keystore password
+#   KEY_ALIAS                 — key alias inside the keystore
+#   KEY_PASSWORD              — key password
+#   PLAY_SERVICE_ACCOUNT_JSON — Play Console API service account key (JSON)
+#   NTFY_TOPIC                — (optional) ntfy.mininews.app topic for notifications
+
+name: Android Build & Publish
+
+on:
+  push:
+    branches:
+      - develop
+    tags:
+      - 'release/**'
+  pull_request:
+    branches:
+      - develop
+  workflow_dispatch:
+    inputs:
+      track:
+        description: 'Play Store track'
+        required: true
+        default: 'internal'
+        type: choice
+        options:
+          - internal
+          - production
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties', '**/libs.versions.toml') }}
+          restore-keys: ${{ runner.os }}-gradle-
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      # ==================== TESTS ====================
+
+      - name: Run unit tests
+        run: ./gradlew :app:testDebugUnitTest --no-daemon
+
+      # ==================== SIGNING + CREDS ====================
+
+      - name: Decode release keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "Error: KEYSTORE_BASE64 secret is not set"
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/keystores"
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/keystores/release.jks"
+          echo "KEYSTORE_PATH=$RUNNER_TEMP/keystores/release.jks" >> "$GITHUB_ENV"
+
+      - name: Write keystore.properties
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          cat > keystore.properties <<EOF
+          storeFile=$KEYSTORE_PATH
+          storePassword=$KEYSTORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          EOF
+
+      - name: Write Play service account JSON
+        env:
+          PLAY_SA_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          if [ -z "$PLAY_SA_JSON" ]; then
+            echo "PLAY_SERVICE_ACCOUNT_JSON secret missing — publish steps will fail."
+          fi
+          printf '%s' "$PLAY_SA_JSON" > "$RUNNER_TEMP/play-account.json"
+          echo "PLAY_SERVICE_ACCOUNT_JSON=$RUNNER_TEMP/play-account.json" >> "$GITHUB_ENV"
+
+      # ==================== BUILD ====================
+
+      - name: Build release bundle
+        run: ./gradlew :app:bundleRelease --no-daemon
+
+      # ==================== PUBLISH ====================
+
+      - name: Determine publish track
+        id: track
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "track=${{ inputs.track }}" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == refs/tags/release/* ]]; then
+            echo "track=production" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == "refs/heads/develop" ]]; then
+            echo "track=internal" >> $GITHUB_OUTPUT
+          else
+            echo "track=none" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Publish to internal
+        if: steps.track.outputs.track == 'internal'
+        run: ./gradlew :app:publishReleaseBundle -PplayTrack=internal --no-daemon
+
+      - name: Promote internal → production
+        if: steps.track.outputs.track == 'production'
+        run: ./gradlew :app:promoteReleaseArtifact --from-track internal --promote-track production --no-daemon
+
+      # ==================== NOTIFY ====================
+
+      - name: ntfy notification (success)
+        if: success() && env.NTFY_TOPIC != ''
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: |
+          TRACK="${{ steps.track.outputs.track }}"
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          if [ "$TRACK" = "production" ]; then
+            TITLE="BouncyBubbles → PRODUCTION"
+            TAGS="rocket"
+            PRIORITY="high"
+          elif [ "$TRACK" = "internal" ]; then
+            TITLE="BouncyBubbles → internal track"
+            TAGS="white_check_mark"
+            PRIORITY="default"
+          else
+            TITLE="BouncyBubbles build passed"
+            TAGS="white_check_mark"
+            PRIORITY="default"
+          fi
+          curl -s \
+            -H "Title: $TITLE" \
+            -H "Tags: $TAGS" \
+            -H "Priority: $PRIORITY" \
+            -H "Click: $RUN_URL" \
+            -d "Branch: ${{ github.ref_name }}
+          Commit: ${GITHUB_SHA::7}
+          Run: $RUN_URL" \
+            "https://ntfy.mininews.app/$NTFY_TOPIC"
+
+      - name: ntfy notification (failure)
+        if: failure() && env.NTFY_TOPIC != ''
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: |
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          curl -s \
+            -H "Title: BouncyBubbles build FAILED" \
+            -H "Tags: x" \
+            -H "Priority: high" \
+            -H "Click: $RUN_URL" \
+            -d "Branch: ${{ github.ref_name }}
+          Commit: ${GITHUB_SHA::7}
+          Run: $RUN_URL" \
+            "https://ntfy.mininews.app/$NTFY_TOPIC"
